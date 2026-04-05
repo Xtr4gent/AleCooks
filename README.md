@@ -50,4 +50,4 @@ npm run db:deploy
 - Public sign-up is disabled. AleCooks seeds exactly one owner account from `ALECOOKS_OWNER_*` env vars.
 - Recipe import is lightweight in this first pass. Link parsing is not implemented yet.
 - Shopping lists are stable snapshots and only change when you regenerate them.
-- Railway should run `prisma migrate deploy` before `npm start`.
+- `npm start` now runs `prisma migrate deploy` before booting the server, which is the expected Railway startup path.
