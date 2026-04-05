@@ -28,6 +28,7 @@ In local development, AleCooks now creates the target Postgres database if it is
 Default local ports are Vite on `5173+` and the AleCooks server on `3010` to avoid collisions with other apps already using `3000`.
 In production, `DATABASE_URL` must be explicitly set. AleCooks no longer falls back to a local `127.0.0.1` Postgres URL outside development/test.
 On Railway, `BETTER_AUTH_URL` can be derived automatically from `RAILWAY_PUBLIC_DOMAIN`, but `BETTER_AUTH_SECRET` still needs to be set manually in service variables.
+Railway detection is based on Railway runtime env vars, not only `NODE_ENV`, so missing `NODE_ENV=production` will no longer cause a fallback to local Postgres.
 
 ## Checks
 

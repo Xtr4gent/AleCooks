@@ -3,7 +3,13 @@ import 'dotenv/config'
 import { z } from 'zod'
 
 const runtimeNodeEnv = process.env.NODE_ENV ?? 'development'
-const isLocalLikeEnv = runtimeNodeEnv === 'development' || runtimeNodeEnv === 'test'
+const isRailwayRuntime = Boolean(
+  process.env.RAILWAY_ENVIRONMENT_ID ||
+    process.env.RAILWAY_ENVIRONMENT_NAME ||
+    process.env.RAILWAY_PROJECT_ID,
+)
+const isLocalLikeEnv =
+  !isRailwayRuntime && (runtimeNodeEnv === 'development' || runtimeNodeEnv === 'test')
 const derivedRailwayPublicUrl = process.env.RAILWAY_PUBLIC_DOMAIN
   ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
   : undefined

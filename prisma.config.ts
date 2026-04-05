@@ -3,8 +3,13 @@ import 'dotenv/config'
 import { defineConfig } from 'prisma/config'
 
 const runtimeNodeEnv = process.env.NODE_ENV ?? 'development'
+const isRailwayRuntime = Boolean(
+  process.env.RAILWAY_ENVIRONMENT_ID ||
+    process.env.RAILWAY_ENVIRONMENT_NAME ||
+    process.env.RAILWAY_PROJECT_ID,
+)
 const defaultDatasourceUrl =
-  runtimeNodeEnv === 'development' || runtimeNodeEnv === 'test'
+  !isRailwayRuntime && (runtimeNodeEnv === 'development' || runtimeNodeEnv === 'test')
     ? 'postgresql://postgres:postgres@127.0.0.1:5432/alecooks?schema=public'
     : undefined
 
