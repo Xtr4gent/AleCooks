@@ -4,6 +4,9 @@ import { z } from 'zod'
 
 const runtimeNodeEnv = process.env.NODE_ENV ?? 'development'
 const isLocalLikeEnv = runtimeNodeEnv === 'development' || runtimeNodeEnv === 'test'
+const derivedRailwayPublicUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+  : undefined
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -21,7 +24,9 @@ const envSchema = z.object({
 
 function getDevDefaults() {
   if (!isLocalLikeEnv) {
-    return {}
+    return {
+      BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? derivedRailwayPublicUrl,
+    }
   }
 
   return {
