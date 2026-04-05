@@ -18,10 +18,10 @@ const envSchema = z.object({
 
 function getDevDefaults() {
   return {
-    PORT: process.env.PORT ?? '3000',
+    PORT: process.env.PORT ?? '3010',
     BETTER_AUTH_SECRET:
       process.env.BETTER_AUTH_SECRET ?? 'dev-only-super-secret-key-change-me-123',
-    BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? 'http://127.0.0.1:3000',
+    BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? 'http://127.0.0.1:3010',
     DATABASE_URL:
       process.env.DATABASE_URL ??
       'postgresql://postgres:postgres@127.0.0.1:5432/alecooks?schema=public',

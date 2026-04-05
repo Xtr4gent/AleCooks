@@ -10,7 +10,7 @@ AleCooks is a planner-first recipe app prototype for weekly menu planning.
 - Recipe library with source links, notes, categories, and ingredients
 - Shopping list snapshot generation from linked recipes
 - Kitchen tablet preview for a single day view
-- Single-owner username/password auth with Better Auth
+- Single-owner username/password auth with Better Auth at `/api/auth/*`
 - Node + Express server foundation for Railway
 - Prisma schema, generated client, and initial PostgreSQL migration
 - Server-backed planner state for authenticated sessions
@@ -24,6 +24,8 @@ npm run dev
 ```
 
 The Node server expects PostgreSQL-compatible `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and the owner credentials in `.env`.
+In local development, AleCooks now creates the target Postgres database if it is missing and runs checked-in migrations before the server starts.
+Default local ports are Vite on `5173+` and the AleCooks server on `3010` to avoid collisions with other apps already using `3000`.
 
 ## Checks
 

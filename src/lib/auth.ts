@@ -89,18 +89,18 @@ async function request<T>(path: string, init?: RequestInit) {
 }
 
 export function getSession() {
-  return request<AuthSessionResponse>('/auth/get-session')
+  return request<AuthSessionResponse>('/api/auth/get-session')
 }
 
 export function signInUsername(input: { username: string; password: string }) {
-  return request('/auth/sign-in/username', {
+  return request('/api/auth/sign-in/username', {
     method: 'POST',
     body: JSON.stringify(input),
   })
 }
 
 export function signOut() {
-  return request('/auth/sign-out', {
+  return request('/api/auth/sign-out', {
     method: 'POST',
   })
 }

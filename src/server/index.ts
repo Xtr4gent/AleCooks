@@ -6,6 +6,7 @@ import { toNodeHandler } from 'better-auth/node'
 import { ZodError } from 'zod'
 
 import { auth } from './auth.js'
+import { ensureDevDatabaseReady } from './dev-database.js'
 import { env } from './env.js'
 import { toHeaders } from './http.js'
 import { ensureOwnerAccount, isOwnerEmail } from './owner-account.js'
@@ -67,7 +68,16 @@ app.get('/api/health', (_request: Request, response: Response) => {
   })
 })
 
-app.all('/auth/{*any}', toNodeHandler(auth))
+const authHandler = toNodeHandler(auth)
+
+app.use((request: Request, response: Response, next: NextFunction) => {
+  if (!request.path.startsWith('/api/auth/')) {
+    next()
+    return
+  }
+
+  authHandler(request, response)
+})
 
 app.use(express.json({ limit: '1mb' }))
 
@@ -166,7 +176,7 @@ if (env.NODE_ENV === 'production') {
   app.use(express.static(clientDistDir))
 
   app.get('/{*any}', (request: Request, response: Response, next: NextFunction) => {
-    if (request.path.startsWith('/api/') || request.path.startsWith('/auth/')) {
+    if (request.path.startsWith('/api/')) {
       next()
       return
     }
@@ -175,6 +185,7 @@ if (env.NODE_ENV === 'production') {
   })
 }
 
+await ensureDevDatabaseReady()
 await ensureOwnerAccount()
 
 app.listen(env.PORT, () => {

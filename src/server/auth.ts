@@ -6,7 +6,7 @@ import { prisma } from './db.js'
 import { env } from './env.js'
 
 export const auth = betterAuth({
-  basePath: '/auth',
+  basePath: '/api/auth',
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
   database: prismaAdapter(prisma, {
