@@ -1,5 +1,20 @@
-import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
+import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
+import {
+  createRecipe,
+  generateShoppingList,
+  getBootstrap,
+  getSession,
+  saveShoppingList,
+  saveWeekPlan,
+  signInUsername,
+  signOut,
+  type LatestWeekPlanDto,
+  type PlannerDataDto,
+  type RecipeDto,
+  type SessionUser,
+  type ShoppingListItemDto,
+} from './lib/auth'
 
 type DayKey =
   | 'monday'
@@ -41,10 +56,12 @@ type ShoppingItem = {
 }
 
 type PlannerState = {
+  weekStartDate: string
   recipes: Recipe[]
   weekPlan: WeekPlan
   shoppingList: ShoppingItem[]
   shoppingListMeta: {
+    id: string | null
     generatedAt: string | null
     lastGeneratedFrom: string[]
   }
@@ -109,6 +126,28 @@ function createBlankDayPlan(): DayPlan {
   }
 }
 
+function createEmptyWeekPlan(): WeekPlan {
+  return {
+    monday: createBlankDayPlan(),
+    tuesday: createBlankDayPlan(),
+    wednesday: createBlankDayPlan(),
+    thursday: createBlankDayPlan(),
+    friday: createBlankDayPlan(),
+    saturday: createBlankDayPlan(),
+    sunday: createBlankDayPlan(),
+  }
+}
+
+function getWeekStartDateIso(baseDate = new Date()) {
+  const mondayOffset = (baseDate.getDay() + 6) % 7
+  const monday = new Date(baseDate)
+  monday.setDate(baseDate.getDate() - mondayOffset)
+
+  return new Date(
+    Date.UTC(monday.getFullYear(), monday.getMonth(), monday.getDate(), 12, 0, 0, 0),
+  ).toISOString()
+}
+
 function createDefaultWeekPlan(): WeekPlan {
   return {
     monday: {
@@ -128,10 +167,26 @@ function createDefaultWeekPlan(): WeekPlan {
 
 function createInitialState(): PlannerState {
   return {
+    weekStartDate: getWeekStartDateIso(),
     recipes: starterRecipes,
     weekPlan: createDefaultWeekPlan(),
     shoppingList: [],
     shoppingListMeta: {
+      id: null,
+      generatedAt: null,
+      lastGeneratedFrom: [],
+    },
+  }
+}
+
+function createServerPlannerState(): PlannerState {
+  return {
+    weekStartDate: getWeekStartDateIso(),
+    recipes: [],
+    weekPlan: createEmptyWeekPlan(),
+    shoppingList: [],
+    shoppingListMeta: {
+      id: null,
       generatedAt: null,
       lastGeneratedFrom: [],
     },
@@ -185,8 +240,91 @@ function getRecipeById(recipes: Recipe[], recipeId: string | null) {
   return recipes.find((recipe) => recipe.id === recipeId) ?? null
 }
 
+function toRecipe(recipe: RecipeDto): Recipe {
+  return {
+    id: recipe.id,
+    title: recipe.title,
+    sourceUrl: recipe.sourceUrl,
+    notes: recipe.notes,
+    categories: recipe.categories,
+    ingredients: recipe.ingredients,
+  }
+}
+
+function toShoppingItem(item: ShoppingListItemDto): ShoppingItem {
+  return {
+    id: item.id,
+    text: item.text,
+    checked: item.checked,
+    manual: item.manual,
+    sourceRecipeIds: item.sourceRecipeIds,
+  }
+}
+
+function applyWeekPlanDto(baseState: PlannerState, latestWeekPlan: LatestWeekPlanDto): PlannerState {
+  if (!latestWeekPlan) {
+    return baseState
+  }
+
+  const nextWeekPlan = createEmptyWeekPlan()
+
+  latestWeekPlan.mealSlots.forEach((slot) => {
+    const dayKey = slot.dayKey as DayKey
+    const mealKey = slot.mealKey as MealKey
+    nextWeekPlan[dayKey][mealKey] = {
+      displayText: slot.displayText,
+      recipeId: slot.recipeId,
+    }
+  })
+
+  latestWeekPlan.sweetSlots.forEach((slot) => {
+    const dayKey = slot.dayKey as DayKey
+    nextWeekPlan[dayKey].sweet = slot.displayText
+  })
+
+  return {
+    ...baseState,
+    weekStartDate: latestWeekPlan.weekStartDate,
+    weekPlan: nextWeekPlan,
+    shoppingList: latestWeekPlan.shoppingList?.items.map(toShoppingItem) ?? [],
+    shoppingListMeta: {
+      id: latestWeekPlan.shoppingList?.id ?? null,
+      generatedAt: latestWeekPlan.shoppingList?.generatedAt ?? null,
+      lastGeneratedFrom: [
+        ...new Set(latestWeekPlan.mealSlots.map((slot) => slot.recipeId).filter(Boolean)),
+      ] as string[],
+    },
+  }
+}
+
+function plannerStateFromBootstrap(plannerData: PlannerDataDto): PlannerState {
+  const baseState: PlannerState = {
+    ...createServerPlannerState(),
+    recipes: plannerData.recipes.map(toRecipe),
+  }
+
+  return applyWeekPlanDto(baseState, plannerData.latestWeekPlan)
+}
+
 function App() {
   const [state, setState] = useState<PlannerState>(getInitialState)
+  const [authStatus, setAuthStatus] = useState<'loading' | 'signedOut' | 'signedIn'>('loading')
+  const [authPending, setAuthPending] = useState(false)
+  const [authError, setAuthError] = useState('')
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null)
+  const [bootstrapStatus, setBootstrapStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>(
+    'idle',
+  )
+  const [serverRecipeCount, setServerRecipeCount] = useState(0)
+  const [plannerNotice, setPlannerNotice] = useState('')
+  const [plannerError, setPlannerError] = useState('')
+  const [recipePending, setRecipePending] = useState(false)
+  const [weekPlanPending, setWeekPlanPending] = useState(false)
+  const [shoppingPending, setShoppingPending] = useState(false)
+  const [authForm, setAuthForm] = useState({
+    username: 'Ale',
+    password: '',
+  })
   const [selectedDay, setSelectedDay] = useState<DayKey>(getTodayKey)
   const [recipeSearch, setRecipeSearch] = useState('')
   const [recipeForm, setRecipeForm] = useState({
@@ -201,8 +339,12 @@ function App() {
   const [tabletRecipeId, setTabletRecipeId] = useState<string | null>(null)
 
   useEffect(() => {
+    if (authStatus === 'signedIn') {
+      return
+    }
+
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-  }, [state])
+  }, [authStatus, state])
 
   const categoryOptions = useMemo(() => {
     const dynamic = state.recipes.flatMap((recipe) => recipe.categories)
@@ -245,11 +387,47 @@ function App() {
     return [...ids]
   }, [state.weekPlan])
 
-  function updateMealSlot(
-    day: DayKey,
-    meal: MealKey,
-    updates: Partial<MealSlot>,
-  ) {
+  const loadBootstrap = useCallback(async () => {
+    setBootstrapStatus('loading')
+    setPlannerError('')
+
+    try {
+      const bootstrap = await getBootstrap()
+      setServerRecipeCount(bootstrap.plannerData.recipes.length)
+      setState(plannerStateFromBootstrap(bootstrap.plannerData))
+      setBootstrapStatus('loaded')
+      setPlannerNotice('Planner synced from your account.')
+    } catch (error) {
+      setBootstrapStatus('error')
+      setPlannerError(error instanceof Error ? error.message : 'Could not load planner data.')
+    }
+  }, [])
+
+  const initializeSession = useCallback(async () => {
+    try {
+      const session = await getSession()
+
+      if (!session?.user) {
+        setSessionUser(null)
+        setAuthStatus('signedOut')
+        return
+      }
+
+      setSessionUser(session.user)
+      setState(createServerPlannerState())
+      setAuthStatus('signedIn')
+      await loadBootstrap()
+    } catch {
+      setSessionUser(null)
+      setAuthStatus('signedOut')
+    }
+  }, [loadBootstrap])
+
+  useEffect(() => {
+    void initializeSession()
+  }, [initializeSession])
+
+  function updateMealSlot(day: DayKey, meal: MealKey, updates: Partial<MealSlot>) {
     setState((current) => ({
       ...current,
       weekPlan: {
@@ -263,6 +441,8 @@ function App() {
         },
       },
     }))
+    setPlannerNotice('')
+    setPlannerError('')
   }
 
   function handleMealTextChange(day: DayKey, meal: MealKey, value: string) {
@@ -288,6 +468,8 @@ function App() {
         },
       },
     }))
+    setPlannerNotice('')
+    setPlannerError('')
   }
 
   function handleRecipeLink(day: DayKey, meal: MealKey, recipeId: string) {
@@ -299,10 +481,7 @@ function App() {
     })
   }
 
-  function handleRecipeFormChange(
-    field: keyof typeof recipeForm,
-    value: string | string[],
-  ) {
+  function handleRecipeFormChange(field: keyof typeof recipeForm, value: string | string[]) {
     setRecipeForm((current) => ({
       ...current,
       [field]: value,
@@ -322,106 +501,162 @@ function App() {
     })
   }
 
-  function addRecipe() {
+  async function addRecipe() {
     if (!recipeForm.title.trim()) return
 
-    const newRecipe: Recipe = {
-      id: `recipe-${crypto.randomUUID()}`,
-      title: recipeForm.title.trim(),
-      sourceUrl: normalizeUrl(recipeForm.sourceUrl.trim()),
-      notes: recipeForm.notes.trim(),
-      categories:
-        recipeForm.categories.length > 0 ? recipeForm.categories : ['Dinner'],
-      ingredients: recipeForm.ingredients
-        .split('\n')
-        .map((item) => item.trim())
-        .filter(Boolean),
-    }
+    setRecipePending(true)
+    setPlannerError('')
+    setPlannerNotice('')
 
-    setState((current) => ({
-      ...current,
-      recipes: [newRecipe, ...current.recipes],
-    }))
-
-    setRecipeForm({
-      title: '',
-      sourceUrl: '',
-      notes: '',
-      ingredients: '',
-      categories: ['Dinner'],
-    })
-  }
-
-  function generateShoppingList() {
-    const items = new Map<string, ShoppingItem>()
-
-    linkedRecipeIds.forEach((recipeId) => {
-      const recipe = state.recipes.find((candidate) => candidate.id === recipeId)
-      if (!recipe) return
-
-      recipe.ingredients.forEach((ingredient) => {
-        const key = ingredient.toLowerCase()
-        const existing = items.get(key)
-
-        if (existing) {
-          existing.sourceRecipeIds = [...new Set([...existing.sourceRecipeIds, recipe.id])]
-          return
-        }
-
-        items.set(key, {
-          id: `item-${crypto.randomUUID()}`,
-          text: ingredient,
-          checked: false,
-          sourceRecipeIds: [recipe.id],
-          manual: false,
-        })
+    try {
+      const response = await createRecipe({
+        title: recipeForm.title.trim(),
+        sourceUrl: normalizeUrl(recipeForm.sourceUrl.trim()),
+        notes: recipeForm.notes.trim(),
+        categories: recipeForm.categories.length > 0 ? recipeForm.categories : ['Dinner'],
+        ingredients: recipeForm.ingredients
+          .split('\n')
+          .map((item) => item.trim())
+          .filter(Boolean),
       })
-    })
 
-    setState((current) => ({
-      ...current,
-      shoppingList: [...items.values()],
-      shoppingListMeta: {
-        generatedAt: new Date().toISOString(),
-        lastGeneratedFrom: linkedRecipeIds,
-      },
-    }))
+      const nextRecipe = toRecipe(response.recipe)
+      setState((current) => ({
+        ...current,
+        recipes: [nextRecipe, ...current.recipes],
+      }))
+      setServerRecipeCount((count) => count + 1)
+      setRecipeForm({
+        title: '',
+        sourceUrl: '',
+        notes: '',
+        ingredients: '',
+        categories: ['Dinner'],
+      })
+      setPlannerNotice('Recipe saved to your account.')
+    } catch (error) {
+      setPlannerError(error instanceof Error ? error.message : 'Could not save recipe.')
+    } finally {
+      setRecipePending(false)
+    }
   }
 
-  function toggleShoppingItem(itemId: string) {
-    setState((current) => ({
-      ...current,
-      shoppingList: current.shoppingList.map((item) =>
-        item.id === itemId ? { ...item, checked: !item.checked } : item,
-      ),
-    }))
+  async function saveWeekPlanToServer() {
+    setWeekPlanPending(true)
+    setPlannerError('')
+    setPlannerNotice('')
+
+    try {
+      const response = await saveWeekPlan({
+        weekStartDate: state.weekStartDate,
+        days: state.weekPlan,
+      })
+
+      setState((current) => applyWeekPlanDto(current, response.weekPlan))
+      setPlannerNotice('Week plan saved to your kitchen dashboard.')
+    } catch (error) {
+      setPlannerError(error instanceof Error ? error.message : 'Could not save week plan.')
+    } finally {
+      setWeekPlanPending(false)
+    }
   }
 
-  function addManualShoppingItem() {
+  async function persistShoppingItems(nextItems: ShoppingItem[], notice: string) {
+    setShoppingPending(true)
+    setPlannerError('')
+    setPlannerNotice('')
+
+    try {
+      const response = await saveShoppingList({
+        weekStartDate: state.weekStartDate,
+        items: nextItems.map((item) => ({
+          text: item.text,
+          checked: item.checked,
+          manual: item.manual,
+          sourceRecipeIds: item.sourceRecipeIds,
+        })),
+      })
+
+      setState((current) => ({
+        ...current,
+        shoppingList: response.shoppingList?.items.map(toShoppingItem) ?? [],
+        shoppingListMeta: {
+          ...current.shoppingListMeta,
+          id: response.shoppingList?.id ?? null,
+          generatedAt: response.shoppingList?.generatedAt ?? null,
+        },
+      }))
+      setPlannerNotice(notice)
+    } catch (error) {
+      setPlannerError(error instanceof Error ? error.message : 'Could not update shopping list.')
+    } finally {
+      setShoppingPending(false)
+    }
+  }
+
+  async function handleGenerateShoppingList() {
+    setShoppingPending(true)
+    setPlannerError('')
+    setPlannerNotice('')
+
+    try {
+      const savedWeekPlan = await saveWeekPlan({
+        weekStartDate: state.weekStartDate,
+        days: state.weekPlan,
+      })
+
+      const response = await generateShoppingList({
+        weekStartDate: state.weekStartDate,
+      })
+
+      setState((current) => ({
+        ...applyWeekPlanDto(current, savedWeekPlan.weekPlan),
+        shoppingList: response.shoppingList?.items.map(toShoppingItem) ?? [],
+        shoppingListMeta: {
+          id: response.shoppingList?.id ?? null,
+          generatedAt: response.shoppingList?.generatedAt ?? null,
+          lastGeneratedFrom: linkedRecipeIds,
+        },
+      }))
+      setPlannerNotice('Shopping list regenerated from your saved week plan.')
+    } catch (error) {
+      setPlannerError(
+        error instanceof Error ? error.message : 'Could not generate shopping list.',
+      )
+    } finally {
+      setShoppingPending(false)
+    }
+  }
+
+  async function toggleShoppingItem(itemId: string) {
+    const nextItems = state.shoppingList.map((item) =>
+      item.id === itemId ? { ...item, checked: !item.checked } : item,
+    )
+
+    await persistShoppingItems(nextItems, 'Shopping list updated.')
+  }
+
+  async function addManualShoppingItem() {
     if (!shoppingItemDraft.trim()) return
 
-    setState((current) => ({
-      ...current,
-      shoppingList: [
-        ...current.shoppingList,
-        {
-          id: `item-${crypto.randomUUID()}`,
-          text: shoppingItemDraft.trim(),
-          checked: false,
-          sourceRecipeIds: [],
-          manual: true,
-        },
-      ],
-    }))
+    const nextItems = [
+      ...state.shoppingList,
+      {
+        id: `item-${crypto.randomUUID()}`,
+        text: shoppingItemDraft.trim(),
+        checked: false,
+        sourceRecipeIds: [],
+        manual: true,
+      },
+    ]
 
     setShoppingItemDraft('')
+    await persistShoppingItems(nextItems, 'Added a custom grocery item.')
   }
 
-  function removeShoppingItem(itemId: string) {
-    setState((current) => ({
-      ...current,
-      shoppingList: current.shoppingList.filter((item) => item.id !== itemId),
-    }))
+  async function removeShoppingItem(itemId: string) {
+    const nextItems = state.shoppingList.filter((item) => item.id !== itemId)
+    await persistShoppingItems(nextItems, 'Removed the grocery item.')
   }
 
   function handleTabletDayChange(event: ChangeEvent<HTMLSelectElement>) {
@@ -430,8 +665,128 @@ function App() {
     setTabletRecipeId(null)
   }
 
+  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setAuthPending(true)
+    setAuthError('')
+
+    try {
+      await signInUsername({
+        username: authForm.username.trim(),
+        password: authForm.password,
+      })
+
+      setAuthForm({
+        username: 'Ale',
+        password: '',
+      })
+
+      await initializeSession()
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Could not authenticate.')
+    } finally {
+      setAuthPending(false)
+    }
+  }
+
+  async function handleSignOut() {
+    await signOut()
+    setSessionUser(null)
+    setState(getInitialState())
+    setAuthStatus('signedOut')
+    setBootstrapStatus('idle')
+    setServerRecipeCount(0)
+    setPlannerNotice('')
+    setPlannerError('')
+  }
+
+  if (authStatus === 'loading') {
+    return (
+      <div className="auth-screen">
+        <div className="auth-card">
+          <p className="eyebrow">AleCooks</p>
+          <h1>Setting the table...</h1>
+          <p>Checking your session and getting the kitchen ready.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (authStatus === 'signedOut') {
+    return (
+      <div className="auth-screen">
+        <form className="auth-card" onSubmit={handleAuthSubmit}>
+          <p className="eyebrow">AleCooks</p>
+          <h1>Welcome back to your menu board.</h1>
+          <p className="auth-copy">
+            AleCooks is now set up as a single-owner kitchen dashboard. Sign in with your
+            username and password to get to the planner.
+          </p>
+
+          <label className="field">
+            <span>Username</span>
+            <input
+              type="text"
+              value={authForm.username}
+              onChange={(event) =>
+                setAuthForm((current) => ({ ...current, username: event.target.value }))
+              }
+              placeholder="Ale"
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+          </label>
+
+          <label className="field">
+            <span>Password</span>
+            <input
+              type="password"
+              value={authForm.password}
+              onChange={(event) =>
+                setAuthForm((current) => ({ ...current, password: event.target.value }))
+              }
+              placeholder="At least one good secret"
+            />
+          </label>
+
+          {authError ? <p className="auth-error">{authError}</p> : null}
+
+          <button className="primary-button" type="submit" disabled={authPending}>
+            {authPending ? 'Working...' : 'Sign in'}
+          </button>
+        </form>
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell">
+      <div className="app-toolbar">
+        <div>
+          <p className="section-label">Signed in</p>
+          <strong>{sessionUser?.displayUsername ?? sessionUser?.username ?? sessionUser?.name}</strong>
+        </div>
+        <div className="toolbar-actions">
+          <span className="chip">
+            {bootstrapStatus === 'loaded'
+              ? `${serverRecipeCount} server recipes ready`
+              : bootstrapStatus === 'loading'
+                ? 'Connecting to server...'
+                : bootstrapStatus === 'error'
+                  ? 'Server bootstrap needs attention'
+                  : 'Bootstrap idle'}
+          </span>
+          <button className="soft-button" type="button" onClick={handleSignOut}>
+            Sign out
+          </button>
+        </div>
+      </div>
+
+      {plannerError ? <p className="planner-banner planner-banner--error">{plannerError}</p> : null}
+      {!plannerError && plannerNotice ? (
+        <p className="planner-banner planner-banner--notice">{plannerNotice}</p>
+      ) : null}
+
       <header className="hero-panel">
         <div className="hero-copy">
           <p className="eyebrow">AleCooks</p>
@@ -477,9 +832,24 @@ function App() {
               <p className="section-label">Weekly menu planner</p>
               <h2>Give every day its own little card.</h2>
             </div>
-            <button className="soft-button" type="button" onClick={generateShoppingList}>
-              Regenerate shopping list
-            </button>
+            <div className="panel-actions">
+              <button
+                className="soft-button"
+                type="button"
+                onClick={() => void saveWeekPlanToServer()}
+                disabled={weekPlanPending || bootstrapStatus !== 'loaded'}
+              >
+                {weekPlanPending ? 'Saving week...' : 'Save week'}
+              </button>
+              <button
+                className="soft-button"
+                type="button"
+                onClick={() => void handleGenerateShoppingList()}
+                disabled={shoppingPending || bootstrapStatus !== 'loaded'}
+              >
+                {shoppingPending ? 'Generating...' : 'Regenerate shopping list'}
+              </button>
+            </div>
           </div>
 
           <div className="planner-grid">
@@ -503,9 +873,7 @@ function App() {
                     {mealOrder.map((meal) => (
                       <div key={meal} className="meal-preview">
                         <span className="meal-preview__label">{titleCase(meal)}</span>
-                        <strong>
-                          {dayPlan[meal].displayText.trim() || 'Add a meal'}
-                        </strong>
+                        <strong>{dayPlan[meal].displayText.trim() || 'Add a meal'}</strong>
                       </div>
                     ))}
                   </div>
@@ -521,7 +889,7 @@ function App() {
               <p className="section-label">Day editor</p>
               <h2>{dayOrder.find((day) => day.key === selectedDay)?.label}</h2>
             </div>
-            <span className="chip">Side panel flow</span>
+            <span className="chip">Week of {new Date(state.weekStartDate).toLocaleDateString()}</span>
           </div>
 
           <div className="editor-stack">
@@ -529,9 +897,7 @@ function App() {
               <section key={meal} className="meal-editor-card">
                 <div className="meal-editor-card__header">
                   <h3>{titleCase(meal)}</h3>
-                  <span>
-                    {selectedPlan[meal].recipeId ? 'Linked recipe' : 'Text only is okay'}
-                  </span>
+                  <span>{selectedPlan[meal].recipeId ? 'Linked recipe' : 'Text only is okay'}</span>
                 </div>
                 <label className="field">
                   <span>Meal name</span>
@@ -603,7 +969,7 @@ function App() {
               className="recipe-form"
               onSubmit={(event) => {
                 event.preventDefault()
-                addRecipe()
+                void addRecipe()
               }}
             >
               <label className="field">
@@ -617,13 +983,13 @@ function App() {
               </label>
               <label className="field">
                 <span>Source link</span>
-                  <input
-                    type="text"
-                    value={recipeForm.sourceUrl}
-                    placeholder="example.com/recipe or https://..."
-                    onChange={(event) => handleRecipeFormChange('sourceUrl', event.target.value)}
-                  />
-                </label>
+                <input
+                  type="text"
+                  value={recipeForm.sourceUrl}
+                  placeholder="example.com/recipe or https://..."
+                  onChange={(event) => handleRecipeFormChange('sourceUrl', event.target.value)}
+                />
+              </label>
               <label className="field">
                 <span>Notes</span>
                 <textarea
@@ -639,9 +1005,7 @@ function App() {
                   rows={5}
                   value={recipeForm.ingredients}
                   placeholder={'Garlic\nParmesan\nSpinach'}
-                  onChange={(event) =>
-                    handleRecipeFormChange('ingredients', event.target.value)
-                  }
+                  onChange={(event) => handleRecipeFormChange('ingredients', event.target.value)}
                 />
               </label>
 
@@ -661,8 +1025,8 @@ function App() {
                 </div>
               </fieldset>
 
-              <button className="primary-button" type="submit">
-                Save recipe
+              <button className="primary-button" type="submit" disabled={recipePending}>
+                {recipePending ? 'Saving recipe...' : 'Save recipe'}
               </button>
             </form>
 
@@ -711,8 +1075,7 @@ function App() {
             <div className="shopping-meta">
               {state.shoppingListMeta.generatedAt ? (
                 <span>
-                  Last generated{' '}
-                  {new Date(state.shoppingListMeta.generatedAt).toLocaleDateString()}
+                  Last generated {new Date(state.shoppingListMeta.generatedAt).toLocaleDateString()}
                 </span>
               ) : (
                 <span>Not generated yet</span>
@@ -728,7 +1091,12 @@ function App() {
                 placeholder="Add milk, paper towels, berries..."
                 onChange={(event) => setShoppingItemDraft(event.target.value)}
               />
-              <button className="soft-button" type="button" onClick={addManualShoppingItem}>
+              <button
+                className="soft-button"
+                type="button"
+                onClick={() => void addManualShoppingItem()}
+                disabled={shoppingPending}
+              >
                 Add item
               </button>
             </div>
@@ -741,7 +1109,8 @@ function App() {
                       <input
                         type="checkbox"
                         checked={item.checked}
-                        onChange={() => toggleShoppingItem(item.id)}
+                        onChange={() => void toggleShoppingItem(item.id)}
+                        disabled={shoppingPending}
                       />
                       <span>{item.text}</span>
                     </label>
@@ -753,7 +1122,11 @@ function App() {
                               item.sourceRecipeIds.length > 1 ? 's' : ''
                             }`}
                       </small>
-                      <button type="button" onClick={() => removeShoppingItem(item.id)}>
+                      <button
+                        type="button"
+                        onClick={() => void removeShoppingItem(item.id)}
+                        disabled={shoppingPending}
+                      >
                         Remove
                       </button>
                     </div>
@@ -797,8 +1170,7 @@ function App() {
             <div className="tablet-meals">
               {mealOrder.map((meal) => {
                 const linkedRecipe = tabletPlan[meal].recipeId
-                  ? state.recipes.find((recipe) => recipe.id === tabletPlan[meal].recipeId) ??
-                    null
+                  ? state.recipes.find((recipe) => recipe.id === tabletPlan[meal].recipeId) ?? null
                   : null
 
                 return (

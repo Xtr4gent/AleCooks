@@ -4,6 +4,85 @@
   gap: 1.5rem;
 }
 
+.auth-screen {
+  min-height: calc(100vh - 3rem);
+  display: grid;
+  place-items: center;
+  padding: 1rem 0 2rem;
+}
+
+.auth-card {
+  width: min(100%, 34rem);
+  display: grid;
+  gap: 1rem;
+  padding: 1.75rem;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 213, 230, 0.72), transparent 35%),
+    radial-gradient(circle at top right, rgba(204, 234, 255, 0.68), transparent 36%),
+    rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(103, 74, 114, 0.12);
+  box-shadow: 0 24px 80px rgba(142, 112, 168, 0.14);
+  backdrop-filter: blur(18px);
+}
+
+.auth-copy {
+  color: #6f6276;
+}
+
+.auth-error {
+  margin: 0;
+  color: #b24571;
+  font-size: 0.95rem;
+}
+
+.text-button {
+  border: none;
+  background: transparent;
+  color: #8b5e8d;
+  padding: 0;
+  text-align: left;
+}
+
+.app-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(103, 74, 114, 0.12);
+}
+
+.app-toolbar strong {
+  color: #4d3c54;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.planner-banner {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border-radius: 20px;
+  border: 1px solid rgba(103, 74, 114, 0.12);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.planner-banner--notice {
+  color: #5f4966;
+}
+
+.planner-banner--error {
+  color: #a54168;
+  background: rgba(255, 242, 246, 0.9);
+  border-color: rgba(199, 105, 144, 0.2);
+}
+
 .hero-panel,
 .planner-panel,
 .editor-panel,
@@ -128,6 +207,13 @@
   margin-bottom: 1.2rem;
 }
 
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
 .planner-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -242,6 +328,15 @@
   background: linear-gradient(135deg, #ffbfd7, #bfe8ff);
   color: #4e3856;
   font-weight: 700;
+}
+
+.soft-button:disabled,
+.primary-button:disabled,
+.shopping-list button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .soft-button:hover,
@@ -526,6 +621,12 @@
   .planner-grid,
   .shopping-adder {
     grid-template-columns: 1fr;
+  }
+
+  .app-toolbar,
+  .toolbar-actions {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .panel-heading,

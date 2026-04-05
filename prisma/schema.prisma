@@ -1,0 +1,192 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  username      String?   @unique
+  displayUsername String?
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  recipes       Recipe[]
+  weekPlans     WeekPlan[]
+  categories    RecipeCategory[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Recipe {
+  id            String               @id @default(cuid())
+  userId        String
+  title         String
+  sourceUrl     String?
+  notes         String
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ingredients   RecipeIngredient[]
+  categoryLinks RecipeCategoryLink[]
+  mealSlots     MealSlot[]
+  shoppingListItemRecipeSources ShoppingListItemRecipeSource[]
+
+  @@index([userId, title])
+}
+
+model RecipeCategory {
+  id          String               @id @default(cuid())
+  userId      String
+  name        String
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipeLinks RecipeCategoryLink[]
+
+  @@unique([userId, name])
+}
+
+model RecipeCategoryLink {
+  recipeId    String
+  categoryId  String
+  recipe      Recipe         @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  category    RecipeCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([recipeId, categoryId])
+}
+
+model RecipeIngredient {
+  id        String   @id @default(cuid())
+  recipeId  String
+  text      String
+  sortOrder Int
+  recipe    Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@index([recipeId, sortOrder])
+}
+
+model WeekPlan {
+  id            String         @id @default(cuid())
+  userId        String
+  weekStartDate DateTime
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mealSlots     MealSlot[]
+  sweetSlots    SweetSlot[]
+  shoppingLists ShoppingList[]
+
+  @@unique([userId, weekStartDate])
+}
+
+model MealSlot {
+  id          String    @id @default(cuid())
+  weekPlanId  String
+  dayKey      String
+  mealKey     String
+  displayText String
+  recipeId    String?
+  weekPlan    WeekPlan  @relation(fields: [weekPlanId], references: [id], onDelete: Cascade)
+  recipe      Recipe?   @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+
+  @@unique([weekPlanId, dayKey, mealKey])
+}
+
+model SweetSlot {
+  id          String   @id @default(cuid())
+  weekPlanId  String
+  dayKey      String
+  displayText String
+  weekPlan    WeekPlan @relation(fields: [weekPlanId], references: [id], onDelete: Cascade)
+
+  @@unique([weekPlanId, dayKey])
+}
+
+model ShoppingList {
+  id          String             @id @default(cuid())
+  weekPlanId  String
+  generatedAt DateTime
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  weekPlan    WeekPlan           @relation(fields: [weekPlanId], references: [id], onDelete: Cascade)
+  items       ShoppingListItem[]
+}
+
+model ShoppingListItem {
+  id              String                         @id @default(cuid())
+  shoppingListId  String
+  text            String
+  checked         Boolean                        @default(false)
+  manual          Boolean                        @default(false)
+  createdAt       DateTime                       @default(now())
+  updatedAt       DateTime                       @updatedAt
+  shoppingList    ShoppingList                   @relation(fields: [shoppingListId], references: [id], onDelete: Cascade)
+  recipeSources   ShoppingListItemRecipeSource[]
+}
+
+model ShoppingListItemRecipeSource {
+  shoppingListItemId String
+  recipeId           String
+  shoppingListItem   ShoppingListItem @relation(fields: [shoppingListItemId], references: [id], onDelete: Cascade)
+  recipe             Recipe           @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@id([shoppingListItemId, recipeId])
+}
