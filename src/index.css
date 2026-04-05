@@ -1,0 +1,94 @@
+:root {
+  font-family: 'Trebuchet MS', 'Gill Sans', 'Segoe UI', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #574a5f;
+  background:
+    radial-gradient(circle at top left, rgba(255, 221, 232, 0.75), transparent 22%),
+    radial-gradient(circle at top right, rgba(212, 238, 255, 0.9), transparent 24%),
+    radial-gradient(circle at bottom left, rgba(231, 255, 242, 0.75), transparent 18%),
+    linear-gradient(180deg, #fffdfd 0%, #fff8fb 42%, #f8fbff 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 3px solid rgba(210, 110, 165, 0.32);
+  outline-offset: 2px;
+}
+
+a {
+  color: inherit;
+}
+
+#root {
+  width: min(1440px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1.25rem 0 2rem;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: Georgia, 'Times New Roman', serif;
+  color: #433449;
+  line-height: 1.05;
+}
+
+h1 {
+  font-size: clamp(2.6rem, 5vw, 4.9rem);
+  letter-spacing: -0.04em;
+}
+
+h2 {
+  font-size: clamp(1.5rem, 3vw, 2.3rem);
+  letter-spacing: -0.03em;
+}
+
+h3 {
+  font-size: 1.1rem;
+}
+
+p {
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  #root {
+    width: min(100% - 1rem, 1440px);
+    padding-top: 0.75rem;
+  }
+}
