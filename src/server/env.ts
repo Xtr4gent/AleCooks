@@ -2,6 +2,9 @@ import 'dotenv/config'
 
 import { z } from 'zod'
 
+const runtimeNodeEnv = process.env.NODE_ENV ?? 'development'
+const isLocalLikeEnv = runtimeNodeEnv === 'development' || runtimeNodeEnv === 'test'
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
@@ -17,6 +20,10 @@ const envSchema = z.object({
 })
 
 function getDevDefaults() {
+  if (!isLocalLikeEnv) {
+    return {}
+  }
+
   return {
     PORT: process.env.PORT ?? '3010',
     BETTER_AUTH_SECRET:
