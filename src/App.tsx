@@ -67,6 +67,8 @@ type PlannerState = {
   }
 }
 
+type AppRoute = 'planner' | 'tablet'
+
 const STORAGE_KEY = 'alecooks-planner-v1'
 
 const dayOrder: Array<{ key: DayKey; label: string; accent: string }> = [
@@ -225,6 +227,20 @@ function getTodayKey(): DayKey {
   return lookup[dayIndex]
 }
 
+function getRouteFromLocation(): AppRoute {
+  if (typeof window === 'undefined') {
+    return 'planner'
+  }
+
+  return window.location.pathname === '/tablet' ? 'tablet' : 'planner'
+}
+
+function getAdjacentDay(day: DayKey, direction: -1 | 1): DayKey {
+  const currentIndex = dayOrder.findIndex((candidate) => candidate.key === day)
+  const nextIndex = (currentIndex + direction + dayOrder.length) % dayOrder.length
+  return dayOrder[nextIndex].key
+}
+
 function titleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
@@ -308,6 +324,7 @@ function plannerStateFromBootstrap(plannerData: PlannerDataDto): PlannerState {
 
 function App() {
   const [state, setState] = useState<PlannerState>(getInitialState)
+  const [route, setRoute] = useState<AppRoute>(getRouteFromLocation)
   const [authStatus, setAuthStatus] = useState<'loading' | 'signedOut' | 'signedIn'>('loading')
   const [authPending, setAuthPending] = useState(false)
   const [authError, setAuthError] = useState('')
@@ -426,6 +443,15 @@ function App() {
   useEffect(() => {
     void initializeSession()
   }, [initializeSession])
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setRoute(getRouteFromLocation())
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
 
   function updateMealSlot(day: DayKey, meal: MealKey, updates: Partial<MealSlot>) {
     setState((current) => ({
@@ -665,6 +691,27 @@ function App() {
     setTabletRecipeId(null)
   }
 
+  function navigateToRoute(nextRoute: AppRoute) {
+    const nextPath = nextRoute === 'tablet' ? '/tablet' : '/'
+    window.history.pushState({}, '', nextPath)
+    setRoute(nextRoute)
+  }
+
+  function handleOpenTabletMode() {
+    setTabletDay(getTodayKey())
+    setTabletRecipeId(null)
+    navigateToRoute('tablet')
+  }
+
+  function handleReturnToPlanner() {
+    navigateToRoute('planner')
+  }
+
+  function handleTabletStep(direction: -1 | 1) {
+    setTabletDay((current) => getAdjacentDay(current, direction))
+    setTabletRecipeId(null)
+  }
+
   async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setAuthPending(true)
@@ -759,6 +806,115 @@ function App() {
     )
   }
 
+  if (route === 'tablet') {
+    return (
+      <div className="tablet-route-shell">
+        <div className="app-toolbar">
+          <div>
+            <p className="section-label">Tablet mode</p>
+            <strong>{sessionUser?.displayUsername ?? sessionUser?.username ?? sessionUser?.name}</strong>
+          </div>
+          <div className="toolbar-actions">
+            <button className="soft-button" type="button" onClick={handleReturnToPlanner}>
+              Back to planner
+            </button>
+            <button className="soft-button" type="button" onClick={handleSignOut}>
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        {plannerError ? <p className="planner-banner planner-banner--error">{plannerError}</p> : null}
+        {!plannerError && plannerNotice ? (
+          <p className="planner-banner planner-banner--notice">{plannerNotice}</p>
+        ) : null}
+
+        <section className="tablet-route-panel">
+          <div className="tablet-route-header">
+            <div>
+              <p className="section-label">Kitchen display</p>
+              <h1>Today&apos;s menu</h1>
+              <p className="hero-text">
+                Leave this open in the kitchen for a bright, one-day view of what&apos;s on deck.
+              </p>
+            </div>
+            <div className="tablet-route-actions">
+              <button className="soft-button" type="button" onClick={() => handleTabletStep(-1)}>
+                Previous day
+              </button>
+              <label className="tablet-day-picker">
+                <span>Showing</span>
+                <select value={tabletDay} onChange={handleTabletDayChange}>
+                  {dayOrder.map((day) => (
+                    <option key={day.key} value={day.key}>
+                      {day.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="soft-button" type="button" onClick={() => handleTabletStep(1)}>
+                Next day
+              </button>
+            </div>
+          </div>
+
+          <div className="tablet-preview tablet-preview--route">
+            <div className="tablet-screen tablet-screen--route">
+              <div className="tablet-screen__header">
+                <p>Today&apos;s menu</p>
+                <h3>{dayOrder.find((day) => day.key === tabletDay)?.label}</h3>
+              </div>
+
+              <div className="tablet-meals tablet-meals--route">
+                {mealOrder.map((meal) => {
+                  const linkedRecipe = tabletPlan[meal].recipeId
+                    ? state.recipes.find((recipe) => recipe.id === tabletPlan[meal].recipeId) ?? null
+                    : null
+
+                  return (
+                    <button
+                      key={meal}
+                      type="button"
+                      className="tablet-meal-card tablet-meal-card--route"
+                      onClick={() => setTabletRecipeId(linkedRecipe?.id ?? null)}
+                    >
+                      <span>{titleCase(meal)}</span>
+                      <strong>{tabletPlan[meal].displayText || 'Nothing planned yet'}</strong>
+                      <small>{linkedRecipe ? 'Tap for recipe details' : 'Simple meal note'}</small>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="tablet-detail tablet-detail--route">
+                {todayRecipe ? (
+                  <>
+                    <p className="tablet-detail__eyebrow">Recipe details</p>
+                    <h4>{todayRecipe.title}</h4>
+                    <ul>
+                      {todayRecipe.ingredients.map((ingredient) => (
+                        <li key={`${todayRecipe.id}-${ingredient}`}>{ingredient}</li>
+                      ))}
+                    </ul>
+                  </>
+                ) : (
+                  <>
+                    <p className="tablet-detail__eyebrow">Recipe details</p>
+                    <h4>Tap a linked meal to peek at ingredients.</h4>
+                    <p>
+                      This screen stays focused on the day. Meals first, recipe details when
+                      you want them.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell">
       <div className="app-toolbar">
@@ -800,6 +956,11 @@ function App() {
             <span>Planner first</span>
             <span>Recipe friendly</span>
             <span>Tablet ready</span>
+          </div>
+          <div className="hero-actions">
+            <button className="soft-button" type="button" onClick={handleOpenTabletMode}>
+              Open Tablet Mode
+            </button>
           </div>
         </div>
         <aside className="hero-summary" aria-label="This week summary">
@@ -1142,77 +1303,6 @@ function App() {
         </section>
       </section>
 
-      <section className="tablet-panel">
-        <div className="panel-heading">
-          <div>
-            <p className="section-label">Kitchen tablet preview</p>
-            <h2>One day, one glance, no clutter.</h2>
-          </div>
-          <label className="tablet-day-picker">
-            <span>Showing</span>
-            <select value={tabletDay} onChange={handleTabletDayChange}>
-              {dayOrder.map((day) => (
-                <option key={day.key} value={day.key}>
-                  {day.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="tablet-preview">
-          <div className="tablet-screen">
-            <div className="tablet-screen__header">
-              <p>Today&apos;s menu</p>
-              <h3>{dayOrder.find((day) => day.key === tabletDay)?.label}</h3>
-            </div>
-
-            <div className="tablet-meals">
-              {mealOrder.map((meal) => {
-                const linkedRecipe = tabletPlan[meal].recipeId
-                  ? state.recipes.find((recipe) => recipe.id === tabletPlan[meal].recipeId) ?? null
-                  : null
-
-                return (
-                  <button
-                    key={meal}
-                    type="button"
-                    className="tablet-meal-card"
-                    onClick={() => setTabletRecipeId(linkedRecipe?.id ?? null)}
-                  >
-                    <span>{titleCase(meal)}</span>
-                    <strong>{tabletPlan[meal].displayText || 'Nothing planned yet'}</strong>
-                    <small>{linkedRecipe ? 'Tap for recipe details' : 'Simple meal note'}</small>
-                  </button>
-                )
-              })}
-            </div>
-
-            <div className="tablet-detail">
-              {todayRecipe ? (
-                <>
-                  <p className="tablet-detail__eyebrow">Recipe details</p>
-                  <h4>{todayRecipe.title}</h4>
-                  <ul>
-                    {todayRecipe.ingredients.map((ingredient) => (
-                      <li key={`${todayRecipe.id}-${ingredient}`}>{ingredient}</li>
-                    ))}
-                  </ul>
-                </>
-              ) : (
-                <>
-                  <p className="tablet-detail__eyebrow">Recipe details</p>
-                  <h4>Tap a linked meal to peek at ingredients.</h4>
-                  <p>
-                    The tablet stays focused on today&apos;s meals first, and opens recipe
-                    details only when you want them.
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
     </div>
   )
 }

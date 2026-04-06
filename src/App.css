@@ -145,6 +145,12 @@
   gap: 0.6rem;
 }
 
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .hero-pills span,
 .tag,
 .chip,
@@ -526,6 +532,47 @@
   padding-top: 0.5rem;
 }
 
+.tablet-route-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.tablet-route-panel {
+  border: 1px solid rgba(103, 74, 114, 0.12);
+  border-radius: 32px;
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at top left, rgba(255, 214, 230, 0.56), transparent 35%),
+    radial-gradient(circle at top right, rgba(199, 233, 255, 0.52), transparent 36%),
+    rgba(255, 255, 255, 0.82);
+  box-shadow: 0 24px 80px rgba(142, 112, 168, 0.12);
+}
+
+.tablet-route-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.25rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.tablet-route-header h1 {
+  margin: 0;
+  color: #483a51;
+}
+
+.tablet-route-actions {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.tablet-preview--route {
+  padding-top: 0;
+}
+
 .tablet-screen {
   border-radius: 36px;
   padding: 1.4rem;
@@ -536,6 +583,12 @@
   box-shadow:
     0 22px 40px rgba(84, 66, 98, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.tablet-screen--route {
+  min-height: calc(100vh - 16rem);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
 }
 
 .tablet-screen__header {
@@ -577,8 +630,22 @@
   color: #7d6d86;
 }
 
+.tablet-meals--route {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tablet-meal-card--route {
+  min-height: 11rem;
+  align-content: start;
+}
+
 .tablet-detail {
   margin-top: 0.95rem;
+}
+
+.tablet-detail--route {
+  margin-top: 1.25rem;
+  min-height: 12rem;
 }
 
 .tablet-detail h4 {
@@ -608,7 +675,8 @@
   .hero-panel,
   .workspace,
   .lower-grid,
-  .recipe-panel__content {
+  .recipe-panel__content,
+  .tablet-meals--route {
     grid-template-columns: 1fr;
   }
 
@@ -633,7 +701,9 @@
   .day-card__header,
   .recipe-card__header,
   .shopping-list__meta,
-  .tablet-screen__header {
+  .tablet-screen__header,
+  .tablet-route-header,
+  .tablet-route-actions {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -643,7 +713,8 @@
   .editor-panel,
   .recipe-panel,
   .shopping-panel,
-  .tablet-panel {
+  .tablet-panel,
+  .tablet-route-panel {
     border-radius: 24px;
     padding: 1rem;
   }
@@ -651,5 +722,9 @@
   .tablet-screen {
     border-width: 9px;
     border-radius: 28px;
+  }
+
+  .tablet-screen--route {
+    min-height: auto;
   }
 }
