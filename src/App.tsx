@@ -1,11 +1,13 @@
 import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { AuthLoadingScreen, AuthScreen } from './features/auth/AuthScreen'
+import { DayEditorRoute } from './features/planner/DayEditorRoute'
 import { PlannerRoute } from './features/planner/PlannerRoute'
 import {
   STORAGE_KEY,
   applyWeekPlanDto,
   createServerPlannerState,
+  getPathForRoute,
   getAdjacentDay,
   getInitialState,
   getRecipeById,
@@ -57,7 +59,6 @@ function App() {
     username: 'Ale',
     password: '',
   })
-  const [selectedDay, setSelectedDay] = useState<DayKey>(getTodayKey)
   const [recipeSearch, setRecipeSearch] = useState('')
   const [recipeForm, setRecipeForm] = useState({
     title: '',
@@ -118,6 +119,7 @@ function App() {
 
   const sessionDisplayName =
     sessionUser?.displayUsername ?? sessionUser?.username ?? sessionUser?.name ?? 'Ale'
+  const editorDay = route.name === 'day' ? route.day : getTodayKey()
 
   const loadBootstrap = useCallback(async () => {
     setBootstrapStatus('loading')
@@ -407,24 +409,36 @@ function App() {
   }
 
   function navigateToRoute(nextRoute: AppRoute) {
-    const nextPath = nextRoute === 'tablet' ? '/tablet' : '/'
+    const nextPath = getPathForRoute(nextRoute)
     window.history.pushState({}, '', nextPath)
     setRoute(nextRoute)
   }
 
-  function handleOpenTabletMode() {
-    setTabletDay(getTodayKey())
+  function handleOpenTabletMode(day = getTodayKey()) {
+    setTabletDay(day)
     setTabletRecipeId(null)
-    navigateToRoute('tablet')
+    navigateToRoute({ name: 'tablet' })
   }
 
   function handleReturnToPlanner() {
-    navigateToRoute('planner')
+    navigateToRoute({ name: 'planner' })
   }
 
   function handleTabletStep(direction: -1 | 1) {
     setTabletDay((current) => getAdjacentDay(current, direction))
     setTabletRecipeId(null)
+  }
+
+  function handleOpenDay(day: DayKey) {
+    navigateToRoute({ name: 'day', day })
+  }
+
+  function handleDayStep(direction: -1 | 1) {
+    if (route.name !== 'day') {
+      return
+    }
+
+    navigateToRoute({ name: 'day', day: getAdjacentDay(route.day, direction) })
   }
 
   async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
@@ -488,7 +502,7 @@ function App() {
     )
   }
 
-  if (route === 'tablet') {
+  if (route.name === 'tablet') {
     return (
       <TabletRoute
         plannerError={plannerError}
@@ -506,6 +520,29 @@ function App() {
     )
   }
 
+  if (route.name === 'day') {
+    return (
+      <DayEditorRoute
+        bootstrapStatus={bootstrapStatus}
+        plannerError={plannerError}
+        plannerNotice={plannerNotice}
+        weekPlanPending={weekPlanPending}
+        sessionDisplayName={sessionDisplayName}
+        state={state}
+        day={editorDay}
+        onSignOut={handleSignOut}
+        onBackToWeek={handleReturnToPlanner}
+        onOpenTabletMode={() => handleOpenTabletMode(editorDay)}
+        onPreviousDay={() => handleDayStep(-1)}
+        onNextDay={() => handleDayStep(1)}
+        onMealTextChange={handleMealTextChange}
+        onRecipeLink={handleRecipeLink}
+        onSweetChange={updateSweet}
+        onSaveWeekPlan={saveWeekPlanToServer}
+      />
+    )
+  }
+
   return (
     <PlannerRoute
       bootstrapStatus={bootstrapStatus}
@@ -517,18 +554,14 @@ function App() {
       serverRecipeCount={serverRecipeCount}
       sessionDisplayName={sessionDisplayName}
       state={state}
-      selectedDay={selectedDay}
       recipeSearch={recipeSearch}
       recipeForm={recipeForm}
       shoppingItemDraft={shoppingItemDraft}
       categoryOptions={categoryOptions}
       selectedRecipeResults={selectedRecipes}
       onSignOut={handleSignOut}
-      onOpenTabletMode={handleOpenTabletMode}
-      onSelectDay={setSelectedDay}
-      onMealTextChange={handleMealTextChange}
-      onRecipeLink={handleRecipeLink}
-      onSweetChange={updateSweet}
+      onOpenTabletMode={() => handleOpenTabletMode()}
+      onOpenDay={handleOpenDay}
       onSaveWeekPlan={saveWeekPlanToServer}
       onGenerateShoppingList={handleGenerateShoppingList}
       onRecipeSearchChange={setRecipeSearch}

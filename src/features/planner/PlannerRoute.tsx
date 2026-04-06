@@ -19,7 +19,6 @@ type PlannerRouteProps = {
   serverRecipeCount: number
   sessionDisplayName: string
   state: PlannerState
-  selectedDay: DayKey
   recipeSearch: string
   recipeForm: RecipeFormState
   shoppingItemDraft: string
@@ -27,10 +26,7 @@ type PlannerRouteProps = {
   selectedRecipeResults: PlannerState['recipes']
   onSignOut: () => void | Promise<void>
   onOpenTabletMode: () => void
-  onSelectDay: (day: DayKey) => void
-  onMealTextChange: (day: DayKey, meal: 'breakfast' | 'lunch' | 'dinner', value: string) => void
-  onRecipeLink: (day: DayKey, meal: 'breakfast' | 'lunch' | 'dinner', recipeId: string) => void
-  onSweetChange: (day: DayKey, value: string) => void
+  onOpenDay: (day: DayKey) => void
   onSaveWeekPlan: () => void | Promise<void>
   onGenerateShoppingList: () => void | Promise<void>
   onRecipeSearchChange: (value: string) => void
@@ -53,7 +49,6 @@ export function PlannerRoute({
   serverRecipeCount,
   sessionDisplayName,
   state,
-  selectedDay,
   recipeSearch,
   recipeForm,
   shoppingItemDraft,
@@ -61,10 +56,7 @@ export function PlannerRoute({
   selectedRecipeResults,
   onSignOut,
   onOpenTabletMode,
-  onSelectDay,
-  onMealTextChange,
-  onRecipeLink,
-  onSweetChange,
+  onOpenDay,
   onSaveWeekPlan,
   onGenerateShoppingList,
   onRecipeSearchChange,
@@ -76,8 +68,6 @@ export function PlannerRoute({
   onToggleShoppingItem,
   onRemoveShoppingItem,
 }: PlannerRouteProps) {
-  const selectedPlan = state.weekPlan[selectedDay]
-
   return (
     <div className="app-shell">
       <div className="app-toolbar">
@@ -179,15 +169,14 @@ export function PlannerRoute({
           <div className="planner-grid">
             {dayOrder.map((day) => {
               const dayPlan = state.weekPlan[day.key]
-              const isActive = day.key === selectedDay
 
               return (
                 <button
                   key={day.key}
                   type="button"
-                  className={`day-card ${isActive ? 'is-active' : ''}`}
+                  className="day-card"
                   style={{ ['--card-accent' as string]: day.accent }}
-                  onClick={() => onSelectDay(day.key)}
+                  onClick={() => onOpenDay(day.key)}
                 >
                   <div className="day-card__header">
                     <span>{day.label}</span>
@@ -206,66 +195,6 @@ export function PlannerRoute({
             })}
           </div>
         </section>
-
-        <aside className="editor-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="section-label">Day editor</p>
-              <h2>{dayOrder.find((day) => day.key === selectedDay)?.label}</h2>
-            </div>
-            <span className="chip">Week of {new Date(state.weekStartDate).toLocaleDateString()}</span>
-          </div>
-
-          <div className="editor-stack">
-            {mealOrder.map((meal) => (
-              <section key={meal} className="meal-editor-card">
-                <div className="meal-editor-card__header">
-                  <h3>{titleCase(meal)}</h3>
-                  <span>{selectedPlan[meal].recipeId ? 'Linked recipe' : 'Text only is okay'}</span>
-                </div>
-                <label className="field">
-                  <span>Meal name</span>
-                  <input
-                    type="text"
-                    value={selectedPlan[meal].displayText}
-                    placeholder="Leftovers, wraps, lemon pasta..."
-                    onChange={(event) => onMealTextChange(selectedDay, meal, event.target.value)}
-                  />
-                </label>
-                <label className="field">
-                  <span>Link recipe</span>
-                  <select
-                    value={selectedPlan[meal].recipeId ?? ''}
-                    onChange={(event) => onRecipeLink(selectedDay, meal, event.target.value)}
-                  >
-                    <option value="">No linked recipe</option>
-                    {state.recipes.map((recipe) => (
-                      <option key={recipe.id} value={recipe.id}>
-                        {recipe.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </section>
-            ))}
-
-            <section className="meal-editor-card sweet-card">
-              <div className="meal-editor-card__header">
-                <h3>Something sweet</h3>
-                <span>Optional, always welcome</span>
-              </div>
-              <label className="field">
-                <span>Treat or dessert</span>
-                <input
-                  type="text"
-                  value={selectedPlan.sweet}
-                  placeholder="Mini lemon cake, berries, cookies..."
-                  onChange={(event) => onSweetChange(selectedDay, event.target.value)}
-                />
-              </label>
-            </section>
-          </div>
-        </aside>
       </main>
 
       <section className="lower-grid">

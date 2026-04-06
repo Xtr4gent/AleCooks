@@ -51,7 +51,10 @@ export type PlannerState = {
   }
 }
 
-export type AppRoute = 'planner' | 'tablet'
+export type AppRoute =
+  | { name: 'planner' }
+  | { name: 'tablet' }
+  | { name: 'day'; day: DayKey }
 
 export const STORAGE_KEY = 'alecooks-planner-v1'
 
@@ -212,12 +215,38 @@ export function getTodayKey(): DayKey {
   return lookup[dayIndex]
 }
 
+export function isDayKey(value: string): value is DayKey {
+  return dayOrder.some((day) => day.key === value)
+}
+
 export function getRouteFromLocation(): AppRoute {
   if (typeof window === 'undefined') {
-    return 'planner'
+    return { name: 'planner' }
   }
 
-  return window.location.pathname === '/tablet' ? 'tablet' : 'planner'
+  if (window.location.pathname === '/tablet') {
+    return { name: 'tablet' }
+  }
+
+  const dayMatch = window.location.pathname.match(/^\/day\/([a-z]+)$/)
+
+  if (dayMatch && isDayKey(dayMatch[1])) {
+    return { name: 'day', day: dayMatch[1] }
+  }
+
+  return { name: 'planner' }
+}
+
+export function getPathForRoute(route: AppRoute) {
+  if (route.name === 'tablet') {
+    return '/tablet'
+  }
+
+  if (route.name === 'day') {
+    return `/day/${route.day}`
+  }
+
+  return '/'
 }
 
 export function getAdjacentDay(day: DayKey, direction: -1 | 1): DayKey {
